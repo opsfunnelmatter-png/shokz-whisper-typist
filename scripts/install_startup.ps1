@@ -31,9 +31,9 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*voice_typi
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
-# Launch silent background process
-Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`""
-Start-Sleep -Seconds 2
+# Launch silent background process (Detached via Explorer to escape any shell job object)
+Start-Process "explorer.exe" -ArgumentList "`"$vbsPath`""
+Start-Sleep -Seconds 3
 
 $active = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*voice_typing.py*" }
 if ($active) {
