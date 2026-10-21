@@ -177,14 +177,17 @@ def transcribe_chunk_task(pcm_bytes: bytes, lang: str = None) -> str:
             text = GROQ_CLIENT.audio.transcriptions.create(
                 file=('chunk.wav', buf.read()),
                 model='whisper-large-v3',
-                prompt="Bilingual speech in English and Bahasa Melayu (Manglish). Accurate transcription without translating.",
+                prompt="Bahasa Melayu, English, Manglish.",
                 temperature=0.0,
                 response_format='text'
             )
             text_str = text.strip() if text else ""
-            # Filter Whisper phantom hallucinations on ambient silence
-            phantom_tokens = {'.', '...', ' .', ' . . .', 'You', 'Thank you.', 'Bye.', 'Thank you for watching.', 'Subtitles by', 'MBC'}
-            if text_str and text_str not in phantom_tokens:
+            # Filter Whisper phantom hallucinations on ambient silence or prompt leakage
+            if text_str:
+                lower_text = text_str.lower().strip()
+                phantom_exact = {'.', '...', ' .', ' . . .', 'you', 'thank you.', 'bye.', 'thank you for watching.', 'subtitles by', 'mbc', 'accurate transcription without translating.'}
+                if lower_text in phantom_exact or 'accurate transcription' in lower_text or 'without translating' in lower_text:
+                    return ""
                 print(f"  [⚡ Groq Whisper Chunk] >> {text_str}")
                 return text_str
         except Exception as e:
@@ -248,12 +251,16 @@ class RealtimeVoicePipeline:
             except queue.Empty:
                 continue
 
+            rms = np.sqrt(np.mean(data**2))
+            # Discard dead room silence / breathing while user is pausing or thinking
+            if not current_chunk and rms < SILENCE_RMS_THRESHOLD:
+                continue
+
             current_chunk.append(data)
             num_samples = len(data)
             current_chunk_samples += num_samples
             self.total_samples += num_samples
 
-            rms = np.sqrt(np.mean(data**2))
             if rms < SILENCE_RMS_THRESHOLD:
                 silence_samples += num_samples
             else:
@@ -281,9 +288,9 @@ class RealtimeVoicePipeline:
         # Drop micro tail fragments < 350ms (avoid button click / release breath)
         if len(audio_np) < int(0.35 * SAMPLE_RATE):
             return
-        # Verify it has actual voice content, not dead air or button clicks
+        # Verify it has actual voice content, not dead air, breathing, or key clicks
         rms = np.sqrt(np.mean(audio_np**2))
-        if rms >= 0.012 and np.max(np.abs(audio_np)) >= 0.02:
+        if rms >= 0.012 and np.max(np.abs(audio_np)) >= 0.035:
             pcm_bytes = (audio_np * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
             fut = executor.submit(transcribe_chunk_task, pcm_bytes, self.current_lang)
             self.futures.append(fut)
