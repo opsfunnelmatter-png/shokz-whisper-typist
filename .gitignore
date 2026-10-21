@@ -1,0 +1,29 @@
+# Environment & secrets (Strict Rule 0)
+.env
+.env.local
+*.env
+
+# Python compilation & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Runtime logs & diagnostics
+*.log
+service.log
+crash.log
+debug.log
+
+# Operating system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.tmp
